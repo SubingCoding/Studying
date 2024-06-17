@@ -9,7 +9,7 @@
 * 더 안전한 코드 리팩터링을 통해 회귀 걱정 없이 코드를 최적화할 수 있습니다.
 * 기술적 문제를 최소화하는 안정적인 개발 속도
 
-Reference : [[Android Developer] Test App on Android](https://developer.android.com/training/testing)
+
 
 ## 1. What to test in Android
 
@@ -60,7 +60,48 @@ androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 - @SdkSupress : minSdkVersion을 이용
 - @SmallTest, @MediumTest, @LargeTest : 테스트 성격 구분하여 테스트
 
-### 3. Example
+### 3. assertThat
+assertThat은 Junit4.4부터 추가되었으며, 여러 matcher를 사용할 수 있어 기존 assertXXX 메서드보다 더 많은 유연성을 제공한다  
+- 가독성
+  expected와 actual의 위치가 명확히 보이기 때문에 가독성이 향상된다.
+  ```
+  assertEquals(expected, actual);
+  assertThat(actual, is(expected));    // is() 사용
+  ```
+  또한, 같지 않을 경우를 나타내야 할 때도 가독성이 향상된다.
+  ```
+  assertFalse(expected.equals(actual));
+  asserThat(actual, is(not(expected)));    // is(not()) 사용
+  ```
+- Failure 메시지
+  expected 값과 actual 값 모두 에러 메시지에 반환된다.  
+  원인을 찾기 위해 별도의 디버깅 필요없이 에러 메시지 만으로 잘못된 부분을 바로 파악할 수 있다.
+- Type 안정성
+  assertEquals는 Object를 인자로 받고 있기 때문에 Type에 대한 안정성을 보장하지 않는다.
+  ```
+  static public void assertEquals(Object expected, Object actual) {
+    assertEquals(null, expected, actual);
+  }
+
+  assertEquals("abc", 123); // 컴파일에는 성공하지만, 실행시 실패한다.
+  ```
+  반면, assertThat은 위와같은 경우 Compile Error가 발생한다.
+  Generic을 사용하고있어 Type을 확인하기 때문이다
+  ```
+  public static <T> void assertThat(T actual, Matcher<? super T> matcher) {
+    assertThat("", actual, matcher);
+  }
+  ```
+- 유연성
+   anyof와 allof와 같은 matcher를 제공한다.
+  ```
+  assertThat("test", allOf(is("test2"), containsString("te")));
+  ```
+- Custom Matchers
+  custom matchers를 생성할 수있다. TypeSafeMatcher<>를 상속받는다.
+  // TODO: 예제 추가하기.  
+
+## 3. Example
 ```
 // 기본 생성 Unit Test Example
 public class ExampleUnitTest {
@@ -73,4 +114,66 @@ public class ExampleUnitTest {
 }
 ```
 
-// TODO : Updater Version Check method 추가 
+```
+...
+
+import static org.hamcrest.Matchers.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+
+import org.junit.Test;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+public class VersionUnitTest {
+
+    /**
+     * firmware version을 Integer array list 형태로 반환한다.
+     * @return index 0 : Major, 1 : Minor, 2 : Revision, 3 ~ n : etc
+     *         변환 후 Major, Minor, Revision 각 index가 비어있을 경우 0을 채워서 반환한다.
+     *         ex1) [] -> [0,0,0]
+     *         ex2) [0,1] -> [0,1,0]
+     */
+    public static ArrayList<Integer> getFirmwareVersion(String version) {
+        String[] versions = version.split("\\.");
+        ArrayList<Integer> version_list = new ArrayList<>();
+        int end_index;
+
+        for (String ver : versions) {
+            for (end_index = 0; end_index < ver.length(); end_index++) {
+                if (ver.charAt(end_index) < '0' || ver.charAt(end_index) > '9') break;
+            }
+
+            if (end_index > 0) {
+                version_list.add(Integer.parseInt(ver.substring(0, end_index)));
+            }
+        }
+
+        if(version_list.size() < 3) {
+            for (int i = version_list.size(); i < 3; i++){
+                version_list.add(i, 0);
+            }
+        }
+
+        return version_list;
+    }
+
+    private void testFirmwareVersion(String actualVersion, List<Integer> expectedVersion) {
+        ArrayList<Integer> actualResult = getFirmwareVersion(actualVersion);
+        assertThat(actualResult, is(equalTo(expectedVersion)));
+    }
+
+    @Test
+    public void getFirmwareVersion_isCorrect() {
+        testFirmwareVersion("0.0.1", Arrays.asList(0,0,1));
+        testFirmwareVersion("0.1", Arrays.asList(0,1,0));
+        testFirmwareVersion("0.0.1_test", Arrays.asList(0,0,1));
+        testFirmwareVersion("", Arrays.asList(0,0,0));
+        testFirmwareVersion("TestString", Arrays.asList(0,0,0));
+    }
+}
+```
+-----
+### Reference
+[[Android Developer] Test App on Android](https://developer.android.com/training/testing)  
+[Unit Test에서 AssertThat을 사용하자](https://jongmin92.github.io/2020/03/31/Java/use-assertthat/)
